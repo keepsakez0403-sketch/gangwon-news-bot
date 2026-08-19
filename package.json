@@ -1,0 +1,12 @@
+{
+  "name": "gangwon-news-bot",
+  "version": "1.0.0",
+  "description": "강원특별자치도 현안 뉴스 스크랩 봇",
+  "main": "news_bot.js",
+  "scripts": {
+    "start": "node news_bot.js"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.13"
+  }
+}
