@@ -134,7 +134,7 @@ async function fetchArticleFullText(articles) {
   const excludeKeywords = [
     '날씨', '기온', '무더위', '열대야', '비소식', '낮에는',
     '음주운전', '마약', '절도', '경찰', '입건', '체포', '고발', 
-    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집', '소방','시상식'
+    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집', '소방','시상식','을지연습'
   ];
 
   const filteredArticles = articles.filter(article => {
