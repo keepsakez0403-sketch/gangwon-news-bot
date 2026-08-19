@@ -60,7 +60,7 @@ async function collectNaverNews() {
 
   for (const query of queries) {
     let items = [];
-    const apiHubUrl = `[https://naverapihub.apigw.ntruss.com/search/v1/news?query=$](https://naverapihub.apigw.ntruss.com/search/v1/news?query=$){encodeURIComponent(query)}&display=100&sort=date`;
+    const apiHubUrl = '[https://naverapihub.apigw.ntruss.com/search/v1/news?query=](https://naverapihub.apigw.ntruss.com/search/v1/news?query=)' + encodeURIComponent(query) + '&display=100&sort=date';
     
     try {
       let response = await fetch(apiHubUrl, {
@@ -71,7 +71,7 @@ async function collectNaverNews() {
       });
 
       if (!response.ok) {
-        const devUrl = `[https://openapi.naver.com/v1/search/news.json?query=$](https://openapi.naver.com/v1/search/news.json?query=$){encodeURIComponent(query)}&display=100&sort=date`;
+        const devUrl = '[https://openapi.naver.com/v1/search/news.json?query=](https://openapi.naver.com/v1/search/news.json?query=)' + encodeURIComponent(query) + '&display=100&sort=date';
         response = await fetch(devUrl, {
           headers: {
             'X-Naver-Client-Id': clientId,
@@ -85,7 +85,7 @@ async function collectNaverNews() {
         items = json.items || [];
       }
     } catch (e) {
-      console.log(`⚠️ 네이버 API 처리 중 오류 (${query}): ${e.message}`);
+      console.log('⚠️ 네이버 API 처리 중 오류 (' + query + '): ' + e.message);
     }
 
     items.forEach(item => {
@@ -123,7 +123,7 @@ async function collectNaverNews() {
   }
 
   const final45Articles = rawArticles.slice(0, 45);
-  console.log(`✅ 1차 네이버 뉴스 및 사설 수집 완료: 총 ${final45Articles.length}건`);
+  console.log('✅ 1차 네이버 뉴스 및 사설 수집 완료: 총 ' + final45Articles.length + '건');
   return final45Articles;
 }
 
@@ -237,10 +237,10 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){modelName}:generateContent?key=${apiKey}`;
+    const url = '[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)' + modelName + ':generateContent?key=' + apiKey;
 
     for (let retry = 1; retry <= 3; retry++) {
-      console.log(`🤖 Gemini AI [${modelName}] 분석 요청 중... (시도 ${retry}/3)`);
+      console.log('🤖 Gemini AI [' + modelName + '] 분석 요청 중... (시도 ' + retry + '/3)');
 
       try {
         const response = await fetch(url, {
@@ -253,25 +253,25 @@ async function processNewsWithGeminiAI(articlesWithContent) {
           const jsonResponse = await response.json();
           const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
           if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-            console.log(`✅ Gemini AI 분석 완료! (${modelName})`);
+            console.log('✅ Gemini AI 분석 완료! (' + modelName + ')');
             return JSON.parse(candidate.content.parts[0].text);
           }
         } else if (response.status === 503) {
-          console.log(`⚠️ HTTP 503 (서버 과부하) 대기 중... (${retry * 3}초 후 재시도)`);
+          console.log('⚠️ HTTP 503 (서버 과부하) 대기 중... (' + (retry * 3) + '초 후 재시도)');
           await sleep(retry * 3000);
         } else {
           const errText = await response.text();
-          lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
+          lastError = 'Gemini API 오류 [HTTP ' + response.status + ']: ' + errText;
           break;
         }
       } catch (err) {
-        lastError = `Gemini 처리 예외: ${err.message}`;
+        lastError = 'Gemini 처리 예외: ' + err.message;
         break;
       }
     }
   }
 
-  throw new Error(`❌ Gemini AI 분석 실패: ${lastError}`);
+  throw new Error('❌ Gemini AI 분석 실패: ' + lastError);
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
