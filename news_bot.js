@@ -125,12 +125,12 @@ async function collectNaverNews() {
   }
 
   const final45Articles = rawArticles.slice(0, 45);
-  console.log('✅ 1차 네이버 뉴스 및 사설 수집 완료: 총 ' + final45Articles.length + '건');
+  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final45Articles.length + '건');
   return final45Articles;
 }
 
 async function fetchArticleFullText(articles) {
-  console.log('🔄 네이버 뉴스 본문 크롤링 시작 (병렬 비동기 처리)...');
+  console.log('🔄 네이버 뉴스 본문 크롤링 시작...');
   
   const excludeKeywords = [
     '날씨', '기온', '무더위', '열대야', '비소식', '낮에는',
@@ -163,7 +163,7 @@ async function fetchArticleFullText(articles) {
       }
     } catch (e) {}
 
-    const truncatedContent = fullText.length > 400 ? fullText.substring(0, 400) + '...' : fullText;
+    const truncatedContent = fullText.length > 500 ? fullText.substring(0, 500) + '...' : fullText;
 
     return {
       id: idx + 1,
@@ -186,37 +186,51 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  const modelsToTry = [
-    'gemini-3.6-flash'
-  ];
+  const modelsToTry = ['gemini-3.6-flash'];
 
   const systemPrompt = `
 당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
-제공된 기사 목록의 본문을 분석하여 강원도 행정/정책 현안 뉴스 스크랩 보고서를 작성하세요.
+제공된 기사 목록을 분석하여 강원도 행정/정책 현안 뉴스 스크랩 보고서 및 Top 1 기사에 대한 [도정 대응방안 심층 보고서]를 작성하세요.
+
+[보고서 작성 문체 원칙]
+- 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
 
 [수행 지침]
 1. 뉴스 선별 (20~25건 최종 선별):
-   - 핵심 키워드: 강원특별법, 특별법, 강원도지사, 데이터센터, 반도체, 바이오, 강원도 현안, SOC, 특례, 도정, 도지사, 도의회, 과학기술원
-   - 지역 언론사(강원일보, 강원도민일보, G1방송) 기사 가중치 부여 정렬
-   - 제외: 기상, 날씨, 단순 사건/사고(음주운전, 마약, 절도), 타지역 단순 뉴스, 소방, 재난뉴스, 상 수상 등
+   - 핵심 키워드: 강원특별법, 특별법, 강원도지사, 데이터센터, 반도체, 바이오, SOC, 특례, 도정, 도의회 등
+   - 제외: 기상, 날씨, 단순 사건/사고, 소방, 재난뉴스 등
 
-2. 4대 카테고리 분류:
-   - "core_issues": 핵심현안 (3~5건) - 강원특별법, 도지사, 산업, SOC, 정책, 강원도청, 우상호, 특례 등
-   - "general_issues": 일반이슈 (5~6건) - 강원 행정,경제,정치 일반
-   - "local_issues": 시군이슈 - 강원 18개 시군( '춘천', '원주', '강릉', '동해', '태백', '속초', '삼척', '홍천', '횡성', '영월', '평창', '정선', '철원', '화천', '양구', '인제', '고성', '양양') 지역명 제목에 명시 기사
-   - "social_culture_edu": 사회/문화/교육 이슈 - 도내 교육, 문화, 복지, 대학, 사회란 뉴스
+2. Top 1 핵심 기사 지정 및 대응방안 심층 보고서 작성 ("action_plan"):
+   - 수집된 기사 중 강원도정에 파급력이 가장 크거나 대응이 가장 시급한 Top 1 기사를 무조건 1개 지정합니다.
+   - 실무 공무원 시각에서 지휘부에 보고하는 형태로 다음 4개 항목을 심층적으로 작성하세요:
+     1) "target_title": 대상 기사 제목 및 언론사 (예: [강원일보] 기사 제목)
+     2) "issue_overview": 1. 기사 주요내용 (핵심 사실관계 및 현안 요약, 보고체)
+     3) "policy_implication": 2. 도정 시사점 (도정에 미치는 파급효과 및 행정적 의미, 보고체)
+     4) "action_strategies": 3. 대응전략 (단기/중기/장기 단계별 구체적 실행 방안 3가지 이상, 보고체)
+     5) "risk_management": 4. 리스크 관리방안 (예상되는 우려사항, 타지자체 견제, 국회 상황 대응 대책, 보고체)
 
-3. 스마트 요약 및 브리핑:
-   - "today_briefing": Top 1, 2 기사를 바탕으로 도정 시사점 중심 오늘의 종합 브리핑 작성 (공백 포함 300자 내외).
-   - "summary": 각 선별 기사별 핵심 스마트 요약 (공백 포함 250~300자).
+3. 카테고리 분류 및 스크랩 브리핑:
+   - "today_briefing": 오늘의 종합 브리핑 (보고서체, 300자 내외).
+   - 카테고리: "core_issues", "general_issues", "local_issues", "social_culture_edu"
 
 [출력 형식]
 반드시 아래 JSON 구조로만 답변하세요:
 {
-  "today_briefing": "오늘의 핵심 브리핑 내용 (300자 내외)...",
+  "today_briefing": "오늘의 종합 브리핑 내용 (보고체)...",
+  "action_plan": {
+    "target_title": "[강원일보] 기사 제목 예시",
+    "issue_overview": "현안 핵심 사실관계 요약 내용...",
+    "policy_implication": "도정 파급효과 및 행정적 시사점...",
+    "action_strategies": [
+      "• 1단계(즉시 대응): 단기 조치 및 지휘부 보고 사항...",
+      "• 2단계(실국 협의): 중기 관련 부서 협의 및 조례 제정 추진...",
+      "• 3단계(제도 개선): 법안 통과 및 국비 확보 연계 전략..."
+    ],
+    "risk_management": "예상 우려사항 및 단계별 리스크 차단 대책..."
+  },
   "categories": {
     "core_issues": [
-      { "id": 1, "pressName": "언론사", "title": "제목", "pubDate": "날짜", "link": "URL", "summary": "스마트 요약 (300자)" }
+      { "id": 1, "pressName": "언론사", "title": "제목", "pubDate": "날짜", "link": "URL", "summary": "스마트 요약" }
     ],
     "general_issues": [],
     "local_issues": [],
@@ -241,7 +255,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
 
     for (let retry = 1; retry <= 3; retry++) {
-      console.log('🤖 Gemini AI [' + modelName + '] 분석 요청 중... (시도 ' + retry + '/3)');
+      console.log('🤖 Gemini AI [' + modelName + '] 분석 및 대응방안 보고서 작성 중... (시도 ' + retry + '/3)');
 
       try {
         const response = await fetch(url, {
@@ -254,11 +268,10 @@ async function processNewsWithGeminiAI(articlesWithContent) {
           const jsonResponse = await response.json();
           const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
           if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-            console.log('✅ Gemini AI 분석 완료! (' + modelName + ')');
+            console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
             return JSON.parse(candidate.content.parts[0].text);
           }
         } else if (response.status === 503) {
-          console.log('⚠️ HTTP 503 (서버 과부하) 대기 중... (' + (retry * 3) + '초 후 재시도)');
           await sleep(retry * 3000);
         } else {
           const errText = await response.text();
@@ -277,6 +290,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 function buildHtmlEmailBody(aiResult, todayStr) {
   const briefing = aiResult.today_briefing || '오늘의 주요 브리핑 내용이 없습니다.';
+  const plan = aiResult.action_plan || {};
   const cats = aiResult.categories || {};
 
   const coreList = cats.core_issues || [];
@@ -319,12 +333,45 @@ function buildHtmlEmailBody(aiResult, todayStr) {
         <h1 style="margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3;">${todayStr} 강원특별자치도 현안 뉴스 스크랩</h1>
       </div>
       <div style="padding: 28px 24px;">
+        <!-- 오늘의 핵심 브리핑 -->
         <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 6px solid #059669; border-radius: 10px; padding: 22px; margin-bottom: 28px;">
-          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #065f46; font-weight: 800;">📌 1. 오늘의 핵심 브리핑 (Top Issues)</h2>
+          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #065f46; font-weight: 800;">📌 오늘의 종합 브리핑</h2>
           <p style="margin: 0; font-size: 15px; line-height: 1.75; color: #0f172a; white-space: pre-line; font-weight: 500;">${briefing}</p>
         </div>
+
+        <!-- Top 1 핵심현안 도정 대응방안 심층 보고서 -->
+        ${plan.target_title ? `
+        <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 6px solid #2563eb; border-radius: 10px; padding: 22px; margin-bottom: 28px;">
+          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #1e40af; font-weight: 800;">📋 [Top 1 현안] 도정 대응방안 심층 보고서</h2>
+          <div style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 14px;">🎯 대상 기사: ${plan.target_title}</div>
+          
+          <div style="margin-bottom: 14px;">
+            <strong style="color: #1e40af; font-size: 15px;">1. 기사 주요내용</strong>
+            <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155; line-height: 1.65; white-space: pre-line;">${plan.issue_overview || ''}</p>
+          </div>
+          
+          <div style="margin-bottom: 14px;">
+            <strong style="color: #1e40af; font-size: 15px;">2. 도정 시사점</strong>
+            <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155; line-height: 1.65; white-space: pre-line;">${plan.policy_implication || ''}</p>
+          </div>
+
+          <div style="margin-bottom: 14px;">
+            <strong style="color: #1e40af; font-size: 15px;">3. 대응전략</strong>
+            <ul style="margin: 6px 0 0 0; padding-left: 20px; font-size: 14px; color: #334155; line-height: 1.65;">
+              ${(plan.action_strategies || []).map(s => `<li>${s}</li>`).join('')}
+            </ul>
+          </div>
+
+          <div>
+            <strong style="color: #1e40af; font-size: 15px;">4. 리스크 관리방안</strong>
+            <p style="margin: 4px 0 0 0; font-size: 14px; color: #334155; line-height: 1.65; white-space: pre-line;">${plan.risk_management || ''}</p>
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- 목차 -->
         <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 22px; margin-bottom: 32px;">
-          <h2 style="margin-top: 0; font-size: 19px; color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px; font-weight: 800; margin-bottom: 16px;">📋 2. 기사 목차 (카테고리별 정렬)</h2>
+          <h2 style="margin-top: 0; font-size: 19px; color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px; font-weight: 800; margin-bottom: 16px;">📋 기사 목차</h2>
           <h3 style="color: #2563eb; font-size: 16px; margin: 14px 0 8px 0; font-weight: 800;">(1) 핵심현안 (${coreList.length}건)</h3>
           <ol style="padding-left: 20px; margin: 0;">${coreList.map(renderTocItem).join('')}</ol>
           <h3 style="color: #0284c7; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(2) 일반이슈 (${generalList.length}건)</h3>
@@ -334,8 +381,10 @@ function buildHtmlEmailBody(aiResult, todayStr) {
           <h3 style="color: #0d9488; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(4) 사회 / 문화 / 교육 이슈 (${eduList.length}건)</h3>
           <ol style="padding-left: 20px; margin: 0;">${eduList.map(renderTocItem).join('')}</ol>
         </div>
+
+        <!-- 스마트 요약 -->
         <div>
-          <h2 style="margin-top: 0; font-size: 20px; color: #0f172a; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 20px; font-weight: 800;">🔍 3. 기사 카테고리별 스마트 요약</h2>
+          <h2 style="margin-top: 0; font-size: 20px; color: #0f172a; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 20px; font-weight: 800;">🔍 기사 카테고리별 스마트 요약</h2>
           ${coreList.length > 0 ? `<h3 style="color: #2563eb; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #2563eb; padding-left: 8px;">■ 핵심현안</h3>` + coreList.map(item => renderSummaryCard(item, '#2563eb', '#eff6ff')).join('') : ''}
           ${generalList.length > 0 ? `<h3 style="color: #0284c7; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0284c7; padding-left: 8px;">■ 일반이슈</h3>` + generalList.map(item => renderSummaryCard(item, '#0284c7', '#f0f9ff')).join('') : ''}
           ${localList.length > 0 ? `<h3 style="color: #059669; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #059669; padding-left: 8px;">■ 시군이슈</h3>` + localList.map(item => renderSummaryCard(item, '#059669', '#ecfdf5')).join('') : ''}
@@ -374,76 +423,80 @@ async function sendTelegramMessage(aiResult, todayStr) {
   const webReportUrl = process.env.WEB_REPORT_URL || '';
 
   if (!token || !chatId) {
-    console.log('ℹ️ TELEGRAM_BOT_TOKEN 또는 TELEGRAM_CHAT_ID 환경변수가 설정되지 않아 텔레그램 발송을 건너뜁니다.');
     return;
   }
 
+  const telegramUrl = 'https://api.telegram.org/bot' + token + '/sendMessage';
   const briefing = aiResult.today_briefing || '';
+  const plan = aiResult.action_plan || {};
   const cats = aiResult.categories || {};
 
-  let msg = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n`;
+  // 1번 메시지: 일일 뉴스 종합 브리핑 및 핵심 기사 목록
+  let msg1 = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n`;
 
   if (webReportUrl) {
-    msg += `🌐 <b><a href="${webReportUrl}">[클릭] 기사별 스마트 요약 전체 보고서 (웹)</a></b>\n\n`;
+    msg1 += `🌐 <b><a href="${webReportUrl}">[클릭] 스마트 요약 및 대응방안 웹 보고서</a></b>\n\n`;
   }
 
   if (briefing) {
-    msg += `📌 <b>오늘의 종합 브리핑</b>\n${briefing}\n\n`;
+    msg1 += `📌 <b>오늘의 종합 브리핑</b>\n${briefing}\n\n`;
   }
 
-  // 1. 핵심 현안 기사는 텔레그램 본문에도 AI 스마트 요약을 직접 표기!
   const coreList = cats.core_issues || [];
   if (coreList.length > 0) {
-    msg += `🔥 <b>[핵심 현안 기사 & 스마트 요약]</b>\n`;
+    msg1 += `🔥 <b>[핵심 현안 기사 & 스마트 요약]</b>\n`;
     coreList.forEach((item, i) => {
-      msg += `\n<b>${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a></b>\n`;
+      msg1 += `\n<b>${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a></b>\n`;
       if (item.summary) {
-        msg += `💡 <i>${item.summary}</i>\n`;
+        msg1 += `💡 <i>${item.summary}</i>\n`;
       }
     });
-    msg += `\n`;
   }
 
-  // 2. 일반 / 시군 / 사회 카테고리 목록
-  const renderSimpleSection = (title, list) => {
-    if (!list || list.length === 0) return '';
-    let section = `<b>■ ${title}</b>\n`;
-    list.slice(0, 5).forEach((item, i) => {
-      section += `${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a>\n`;
-    });
-    return section + '\n';
-  };
-
-  msg += renderSimpleSection('일반이슈', cats.general_issues);
-  msg += renderSimpleSection('시군이슈', cats.local_issues);
-  msg += renderSimpleSection('사회/문화/교육', cats.social_culture_edu);
-
-  if (webReportUrl) {
-    msg += `\n📱 <i>모든 기사의 세부 요약은 상단 [웹 전체 보고서] 링크에서 확인하세요.</i>`;
-  }
-
-  const telegramUrl = 'https://api.telegram.org/bot' + token + '/sendMessage';
-  
   try {
-    const response = await fetch(telegramUrl, {
+    await fetch(telegramUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId,
-        text: msg,
+        text: msg1,
         parse_mode: 'HTML',
         disable_web_page_preview: true
       })
     });
+    console.log('🎉 [성공] 텔레그램 1차 브리핑 메시지 발송 완료!');
+  } catch (err) {}
 
-    if (response.ok) {
-      console.log('🎉 [성공] 텔레그램 브리핑 메시지 발송 완료!');
-    } else {
-      const errText = await response.text();
-      console.error('⚠️ 텔레그램 발송 실패:', errText);
+  // 2번 메시지: Top 1 현안 대응방안 심층 보고서 (요청하신 4대 서식 및 공문서 체 적용)
+  if (plan.target_title) {
+    let msg2 = `📋 <b>[Top 1 현안] 도정 대응방안 심층 보고서</b>\n\n`;
+    msg2 += `🎯 <b>대상기사:</b> ${plan.target_title}\n\n`;
+    msg2 += `📌 <b>1. 기사 주요내용</b>\n${plan.issue_overview || ''}\n\n`;
+    msg2 += `💡 <b>2. 도정 시사점</b>\n${plan.policy_implication || ''}\n\n`;
+    
+    if (plan.action_strategies && plan.action_strategies.length > 0) {
+      msg2 += `🚀 <b>3. 대응전략</b>\n`;
+      plan.action_strategies.forEach(st => {
+        msg2 += `${st.startsWith('•') ? st : '• ' + st}\n`;
+      });
+      msg2 += `\n`;
     }
-  } catch (err) {
-    console.error('⚠️ 텔레그램 발송 요청 중 예외 발생:', err.message);
+
+    msg2 += `⚠️ <b>4. 리스크 관리방안</b>\n${plan.risk_management || ''}`;
+
+    try {
+      await fetch(telegramUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: msg2,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true
+        })
+      });
+      console.log('🎉 [성공] 텔레그램 2차 대응방안 심층 보고서 발송 완료!');
+    } catch (err) {}
   }
 }
 
@@ -469,28 +522,21 @@ async function runGangwonNewsBot() {
     const aiResult = await processNewsWithGeminiAI(articlesWithContent);
     const htmlBody = buildHtmlEmailBody(aiResult, todayStr);
 
-    // 0. 깃허브 웹 보고서용 index.html 파일 생성
     try {
       fs.writeFileSync('index.html', htmlBody, 'utf8');
       console.log('✅ 웹 보고서(index.html) 파일 생성 완료!');
-    } catch (fsErr) {
-      console.error('⚠️ index.html 파일 저장 실패:', fsErr.message);
-    }
+    } catch (fsErr) {}
 
-    // 1. 이메일 보고서 발송
-    await sendEmail(`[강원특별자치도] ${todayStr} 현안 뉴스 스크랩 보고서`, htmlBody);
-    console.log(`🎉 [성공] ${process.env.TARGET_EMAIL} 주소로 스크랩 보고서 전송이 완료되었습니다.`);
+    await sendEmail(`[강원특별자치도] ${todayStr} 현안 뉴스 스크랩 및 대응방안 보고서`, htmlBody);
+    console.log(`🎉 [성공] ${process.env.TARGET_EMAIL} 주소로 보고서 전송 완료`);
 
-    // 2. 텔레그램 브리핑 발송
     await sendTelegramMessage(aiResult, todayStr);
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
     try {
       await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
-    } catch (mailErr) {
-      console.error(`❌ 오류 알림 메일 발송 실패: ${mailErr.message}`);
-    }
+    } catch (mailErr) {}
     process.exit(1);
   }
 }
