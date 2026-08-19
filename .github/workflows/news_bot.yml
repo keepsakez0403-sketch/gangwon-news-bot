@@ -4,11 +4,14 @@ on:
   schedule:
     # UTC 기준 23:00 = 한국시간(KST) 매일 아침 08:00
     - cron: '0 23 * * *'
-  workflow_dispatch: # 버튼을 눌러 수동 실행할 수 있는 기능
+  workflow_dispatch:
 
 jobs:
   run-scrap-bot:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
 
     steps:
       - name: 저장소 코드 가져오기
@@ -22,7 +25,7 @@ jobs:
       - name: 의존성 패키지 설치
         run: npm install
 
-      - name: 뉴스 스크랩 및 이메일 발송 실행
+      - name: 뉴스 스크랩 및 이메일/텔레그램 발송 실행
         env:
           NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
           NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
@@ -32,4 +35,13 @@ jobs:
           SENDER_APP_PASSWORD: ${{ secrets.SENDER_APP_PASSWORD }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WEB_REPORT_URL: ${{ secrets.WEB_REPORT_URL }}
         run: node news_bot.js
+
+      - name: 생성된 index.html 웹페이지 자동 업데이트
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Auto update daily news report webpage [skip ci]" || true
+          git push
