@@ -60,10 +60,15 @@ async function collectNaverNews() {
 
   for (const query of queries) {
     let items = [];
-    const apiHubUrl = '[https://naverapihub.apigw.ntruss.com/search/v1/news?query=](https://naverapihub.apigw.ntruss.com/search/v1/news?query=)' + encodeURIComponent(query) + '&display=100&sort=date';
     
+    // URL 객체를 이용해 특수문자/하이퍼링크 복사 오류 원천 방지
+    const apiHubUrl = new URL('[https://naverapihub.apigw.ntruss.com/search/v1/news](https://naverapihub.apigw.ntruss.com/search/v1/news)');
+    apiHubUrl.searchParams.set('query', query);
+    apiHubUrl.searchParams.set('display', '100');
+    apiHubUrl.searchParams.set('sort', 'date');
+
     try {
-      let response = await fetch(apiHubUrl, {
+      let response = await fetch(apiHubUrl.toString(), {
         headers: {
           'X-NCP-APIGW-API-KEY-ID': clientId,
           'X-NCP-APIGW-API-KEY': clientSecret
@@ -71,8 +76,12 @@ async function collectNaverNews() {
       });
 
       if (!response.ok) {
-        const devUrl = '[https://openapi.naver.com/v1/search/news.json?query=](https://openapi.naver.com/v1/search/news.json?query=)' + encodeURIComponent(query) + '&display=100&sort=date';
-        response = await fetch(devUrl, {
+        const devUrl = new URL('[https://openapi.naver.com/v1/search/news.json](https://openapi.naver.com/v1/search/news.json)');
+        devUrl.searchParams.set('query', query);
+        devUrl.searchParams.set('display', '100');
+        devUrl.searchParams.set('sort', 'date');
+
+        response = await fetch(devUrl.toString(), {
           headers: {
             'X-Naver-Client-Id': clientId,
             'X-Naver-Client-Secret': clientSecret
@@ -237,13 +246,14 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    const url = '[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)' + modelName + ':generateContent?key=' + apiKey;
+    const geminiUrl = new URL('[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)' + modelName + ':generateContent');
+    geminiUrl.searchParams.set('key', apiKey);
 
     for (let retry = 1; retry <= 3; retry++) {
       console.log('🤖 Gemini AI [' + modelName + '] 분석 요청 중... (시도 ' + retry + '/3)');
 
       try {
-        const response = await fetch(url, {
+        const response = await fetch(geminiUrl.toString(), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
