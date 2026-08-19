@@ -60,7 +60,7 @@ async function collectNaverNews() {
 
   for (const query of queries) {
     let items = [];
-    const apiHubUrl = `https://naverapihub.apigw.ntruss.com/search/v1/news?query=${encodeURIComponent(query)}&display=100&sort=date`;
+    const apiHubUrl = `[https://naverapihub.apigw.ntruss.com/search/v1/news?query=$](https://naverapihub.apigw.ntruss.com/search/v1/news?query=$){encodeURIComponent(query)}&display=100&sort=date`;
     
     try {
       let response = await fetch(apiHubUrl, {
@@ -71,7 +71,7 @@ async function collectNaverNews() {
       });
 
       if (!response.ok) {
-        const devUrl = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=100&sort=date`;
+        const devUrl = `[https://openapi.naver.com/v1/search/news.json?query=$](https://openapi.naver.com/v1/search/news.json?query=$){encodeURIComponent(query)}&display=100&sort=date`;
         response = await fetch(devUrl, {
           headers: {
             'X-Naver-Client-Id': clientId,
@@ -184,9 +184,9 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
+  // gemini-3.6-flash 단일 모델 사용
   const modelsToTry = [
-    'gemini-2.5-flash',
-    'gemini-1.5-flash'
+    'gemini-3.6-flash'
   ];
 
   const systemPrompt = `
@@ -237,7 +237,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    const url = `[https://generativelanguage.googleapis.com/v1beta/models/$](https://generativelanguage.googleapis.com/v1beta/models/$){modelName}:generateContent?key=${apiKey}`;
 
     for (let retry = 1; retry <= 3; retry++) {
       console.log(`🤖 Gemini AI [${modelName}] 분석 요청 중... (시도 ${retry}/3)`);
