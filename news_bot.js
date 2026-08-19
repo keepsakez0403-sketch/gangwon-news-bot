@@ -1,3 +1,4 @@
+const fs = require('fs');
 const nodemailer = require('nodemailer');
 
 const NAVER_PRESS_CODE_MAP = {
@@ -306,7 +307,11 @@ function buildHtmlEmailBody(aiResult, todayStr) {
   return `
   <!DOCTYPE html>
   <html>
-  <head><meta charset="utf-8"></head>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${todayStr} 강원특별자치도 현안 뉴스 스크랩</title>
+  </head>
   <body style="font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif; color: #1e293b; background-color: #f1f5f9; padding: 24px 12px; margin: 0;">
     <div style="max-width: 820px; margin: 0 auto; background: #ffffff; border-radius: 14px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.08);">
       <div style="background: linear-gradient(135deg, #047857 0%, #0369a1 50%, #1e3a8a 100%); color: #ffffff; padding: 36px 28px;">
@@ -363,10 +368,10 @@ async function sendEmail(subject, htmlContent) {
   });
 }
 
-// 📲 텔레그램 전송 전용 함수
 async function sendTelegramMessage(aiResult, todayStr) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
+  const webReportUrl = process.env.WEB_REPORT_URL || '';
 
   if (!token || !chatId) {
     console.log('ℹ️ TELEGRAM_BOT_TOKEN 또는 TELEGRAM_CHAT_ID 환경변수가 설정되지 않아 텔레그램 발송을 건너뜁니다.');
@@ -377,23 +382,45 @@ async function sendTelegramMessage(aiResult, todayStr) {
   const cats = aiResult.categories || {};
 
   let msg = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n`;
-  if (briefing) {
-    msg += `📌 <b>오늘의 핵심 브리핑</b>\n${briefing}\n\n`;
+
+  if (webReportUrl) {
+    msg += `🌐 <b><a href="${webReportUrl}">[클릭] 기사별 스마트 요약 전체 보고서 (웹)</a></b>\n\n`;
   }
 
-  const renderSection = (title, list) => {
+  if (briefing) {
+    msg += `📌 <b>오늘의 종합 브리핑</b>\n${briefing}\n\n`;
+  }
+
+  // 1. 핵심 현안 기사는 텔레그램 본문에도 AI 스마트 요약을 직접 표기!
+  const coreList = cats.core_issues || [];
+  if (coreList.length > 0) {
+    msg += `🔥 <b>[핵심 현안 기사 & 스마트 요약]</b>\n`;
+    coreList.forEach((item, i) => {
+      msg += `\n<b>${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a></b>\n`;
+      if (item.summary) {
+        msg += `💡 <i>${item.summary}</i>\n`;
+      }
+    });
+    msg += `\n`;
+  }
+
+  // 2. 일반 / 시군 / 사회 카테고리 목록
+  const renderSimpleSection = (title, list) => {
     if (!list || list.length === 0) return '';
     let section = `<b>■ ${title}</b>\n`;
-    list.forEach((item, i) => {
+    list.slice(0, 5).forEach((item, i) => {
       section += `${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a>\n`;
     });
     return section + '\n';
   };
 
-  msg += renderSection('핵심현안', cats.core_issues);
-  msg += renderSection('일반이슈', cats.general_issues);
-  msg += renderSection('시군이슈', cats.local_issues);
-  msg += renderSection('사회/문화/교육', cats.social_culture_edu);
+  msg += renderSimpleSection('일반이슈', cats.general_issues);
+  msg += renderSimpleSection('시군이슈', cats.local_issues);
+  msg += renderSimpleSection('사회/문화/교육', cats.social_culture_edu);
+
+  if (webReportUrl) {
+    msg += `\n📱 <i>모든 기사의 세부 요약은 상단 [웹 전체 보고서] 링크에서 확인하세요.</i>`;
+  }
 
   const telegramUrl = 'https://api.telegram.org/bot' + token + '/sendMessage';
   
@@ -441,6 +468,14 @@ async function runGangwonNewsBot() {
     const articlesWithContent = await fetchArticleFullText(rawArticles);
     const aiResult = await processNewsWithGeminiAI(articlesWithContent);
     const htmlBody = buildHtmlEmailBody(aiResult, todayStr);
+
+    // 0. 깃허브 웹 보고서용 index.html 파일 생성
+    try {
+      fs.writeFileSync('index.html', htmlBody, 'utf8');
+      console.log('✅ 웹 보고서(index.html) 파일 생성 완료!');
+    } catch (fsErr) {
+      console.error('⚠️ index.html 파일 저장 실패:', fsErr.message);
+    }
 
     // 1. 이메일 보고서 발송
     await sendEmail(`[강원특별자치도] ${todayStr} 현안 뉴스 스크랩 보고서`, htmlBody);
