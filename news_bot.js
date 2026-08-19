@@ -61,7 +61,6 @@ async function collectNaverNews() {
   for (const query of queries) {
     let items = [];
     const encodedQuery = encodeURIComponent(query);
-    // [수정] 네이버 클라우드 API Hub URL 파싱 오류 해결
     const apiHubUrl = 'https://naverapihub.apigw.ntruss.com/search/v1/news?query=' + encodedQuery + '&display=100&sort=date';
     
     try {
@@ -73,7 +72,6 @@ async function collectNaverNews() {
       });
 
       if (!response.ok) {
-        // [수정] 네이버 오픈 API 개발자센터 URL 파싱 오류 해결
         const devUrl = 'https://openapi.naver.com/v1/search/news.json?query=' + encodedQuery + '&display=100&sort=date';
         response = await fetch(devUrl, {
           headers: {
@@ -187,7 +185,6 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // gemini-3.6-flash 단일 모델 사용
   const modelsToTry = [
     'gemini-3.6-flash'
   ];
@@ -240,7 +237,6 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    // [수정] Gemini API 호출 URL 파싱 오류 해결
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
 
     for (let retry = 1; retry <= 3; retry++) {
@@ -367,6 +363,63 @@ async function sendEmail(subject, htmlContent) {
   });
 }
 
+// 📲 텔레그램 전송 전용 함수
+async function sendTelegramMessage(aiResult, todayStr) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (!token || !chatId) {
+    console.log('ℹ️ TELEGRAM_BOT_TOKEN 또는 TELEGRAM_CHAT_ID 환경변수가 설정되지 않아 텔레그램 발송을 건너뜁니다.');
+    return;
+  }
+
+  const briefing = aiResult.today_briefing || '';
+  const cats = aiResult.categories || {};
+
+  let msg = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n`;
+  if (briefing) {
+    msg += `📌 <b>오늘의 핵심 브리핑</b>\n${briefing}\n\n`;
+  }
+
+  const renderSection = (title, list) => {
+    if (!list || list.length === 0) return '';
+    let section = `<b>■ ${title}</b>\n`;
+    list.forEach((item, i) => {
+      section += `${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a>\n`;
+    });
+    return section + '\n';
+  };
+
+  msg += renderSection('핵심현안', cats.core_issues);
+  msg += renderSection('일반이슈', cats.general_issues);
+  msg += renderSection('시군이슈', cats.local_issues);
+  msg += renderSection('사회/문화/교육', cats.social_culture_edu);
+
+  const telegramUrl = 'https://api.telegram.org/bot' + token + '/sendMessage';
+  
+  try {
+    const response = await fetch(telegramUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: msg,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true
+      })
+    });
+
+    if (response.ok) {
+      console.log('🎉 [성공] 텔레그램 브리핑 메시지 발송 완료!');
+    } else {
+      const errText = await response.text();
+      console.error('⚠️ 텔레그램 발송 실패:', errText);
+    }
+  } catch (err) {
+    console.error('⚠️ 텔레그램 발송 요청 중 예외 발생:', err.message);
+  }
+}
+
 async function runGangwonNewsBot() {
   console.log('🚀 강원특별자치도 현안 뉴스 스크랩 봇 실행 시작...');
 
@@ -389,8 +442,12 @@ async function runGangwonNewsBot() {
     const aiResult = await processNewsWithGeminiAI(articlesWithContent);
     const htmlBody = buildHtmlEmailBody(aiResult, todayStr);
 
+    // 1. 이메일 보고서 발송
     await sendEmail(`[강원특별자치도] ${todayStr} 현안 뉴스 스크랩 보고서`, htmlBody);
     console.log(`🎉 [성공] ${process.env.TARGET_EMAIL} 주소로 스크랩 보고서 전송이 완료되었습니다.`);
+
+    // 2. 텔레그램 브리핑 발송
+    await sendTelegramMessage(aiResult, todayStr);
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
