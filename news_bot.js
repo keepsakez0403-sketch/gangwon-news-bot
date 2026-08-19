@@ -61,7 +61,8 @@ async function collectNaverNews() {
   for (const query of queries) {
     let items = [];
     const encodedQuery = encodeURIComponent(query);
-    const apiHubUrl = '[https://naverapihub.apigw.ntruss.com/search/v1/news?query=](https://naverapihub.apigw.ntruss.com/search/v1/news?query=)' + encodedQuery + '&display=100&sort=date';
+    // [수정] 네이버 클라우드 API Hub URL 파싱 오류 해결
+    const apiHubUrl = 'https://naverapihub.apigw.ntruss.com/search/v1/news?query=' + encodedQuery + '&display=100&sort=date';
     
     try {
       let response = await fetch(apiHubUrl, {
@@ -72,7 +73,8 @@ async function collectNaverNews() {
       });
 
       if (!response.ok) {
-        const devUrl = '[https://openapi.naver.com/v1/search/news.json?query=](https://openapi.naver.com/v1/search/news.json?query=)' + encodedQuery + '&display=100&sort=date';
+        // [수정] 네이버 오픈 API 개발자센터 URL 파싱 오류 해결
+        const devUrl = 'https://openapi.naver.com/v1/search/news.json?query=' + encodedQuery + '&display=100&sort=date';
         response = await fetch(devUrl, {
           headers: {
             'X-Naver-Client-Id': clientId,
@@ -238,7 +240,8 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    const url = '[https://generativelanguage.googleapis.com/v1beta/models/](https://generativelanguage.googleapis.com/v1beta/models/)' + modelName + ':generateContent?key=' + apiKey;
+    // [수정] Gemini API 호출 URL 파싱 오류 해결
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
 
     for (let retry = 1; retry <= 3; retry++) {
       console.log('🤖 Gemini AI [' + modelName + '] 분석 요청 중... (시도 ' + retry + '/3)');
