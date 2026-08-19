@@ -1,0 +1,33 @@
+name: Gangwon News Scrap Bot
+
+on:
+  schedule:
+    # UTC 기준 23:00 = 한국시간(KST) 매일 아침 08:00
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 버튼을 눌러 수동 실행할 수 있는 기능
+
+jobs:
+  run-scrap-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 저장소 코드 가져오기
+        uses: actions/checkout@v4
+
+      - name: Node.js 환경 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 의존성 패키지 설치
+        run: npm install
+
+      - name: 뉴스 스크랩 및 이메일 발송 실행
+        env:
+          NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
+          NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TARGET_EMAIL: ${{ secrets.TARGET_EMAIL }}
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_APP_PASSWORD: ${{ secrets.SENDER_APP_PASSWORD }}
+        run: node news_bot.js
