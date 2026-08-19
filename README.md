@@ -1,1 +1,1 @@
-# gangwon-news-bot
+# Gangwon-State News-Bot
