@@ -184,9 +184,12 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // gemini-3.6-flash 단일 모델 사용
+  // Google AI Studio 최신 지원 모델 우선순위 리스트
   const modelsToTry = [
-    'gemini-3.6-flash'
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash-002',
+    'gemini-2.5-pro'
   ];
 
   const systemPrompt = `
