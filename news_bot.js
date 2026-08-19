@@ -432,10 +432,10 @@ async function sendTelegramMessage(aiResult, todayStr) {
   const cats = aiResult.categories || {};
 
   // 1번 메시지: 일일 뉴스 종합 브리핑 및 핵심 기사 목록
-  let msg1 = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n`;
+  let msg1 = `🏛 <b>[강원특별자치도] ${todayStr} 현안 브리핑</b>\n\n\n`;
 
   if (webReportUrl) {
-    msg1 += `🌐 <b><a href="${webReportUrl}">[클릭] 스마트 요약 및 대응방안 웹 보고서</a></b>\n\n`;
+    msg1 += `🌐 <b><a href="${webReportUrl}"> [전체보기 클릭] 전체 기사 스마트 요약 </a></b>\n\n\n`;
   }
 
   if (briefing) {
@@ -448,11 +448,13 @@ async function sendTelegramMessage(aiResult, todayStr) {
     coreList.forEach((item, i) => {
       msg1 += `\n<b>${i + 1}. [${item.pressName}] <a href="${item.link}">${item.title}</a></b>\n`;
       if (item.summary) {
-        msg1 += `💡 <i>${item.summary}</i>\n`;
+        msg1 += `💡 <i>${item.summary}</i>\n\n\n`;
       }
-    });
+    });  
   }
-
+  if (webReportUrl) {
+    msg1 += `🌐 <b><a href="${webReportUrl}"> [전체보기 클릭] 전체 기사 스마트 요약 </a></b>\n\n\n`;
+  }
   try {
     await fetch(telegramUrl, {
       method: 'POST',
