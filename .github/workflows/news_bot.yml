@@ -3,7 +3,7 @@ name: Gangwon News Scrap Bot
 on:
   schedule:
     # UTC 기준 23:00 = 한국시간(KST) 매일 아침 08:00
-    - cron: '0 22 * * *'
+    - cron: '5 21 * * *'
   workflow_dispatch:
 
 jobs:
