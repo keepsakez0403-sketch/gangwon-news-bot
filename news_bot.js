@@ -212,6 +212,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 3. 카테고리 분류 및 스크랩 브리핑:
    - "today_briefing": 오늘의 종합 브리핑 (보고서체, 300자 내외).
    - 카테고리: "core_issues", "general_issues", "local_issues", "social_culture_edu"
+   - 각 기사별 스마트 요약("summary"): 핵심 사실, 추진 배경, 향후 영향 등을 포함하여 **공식 보고서체로 300자 내외의 충분히 길고 상세한 요약**으로 작성하세요.
 
 [출력 형식]
 반드시 아래 JSON 구조로만 답변하세요:
@@ -230,7 +231,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   },
   "categories": {
     "core_issues": [
-      { "id": 1, "pressName": "언론사", "title": "제목", "pubDate": "날짜", "link": "URL", "summary": "스마트 요약" }
+      { "id": 1, "pressName": "언론사", "title": "제목", "pubDate": "날짜", "link": "URL", "summary": "기사의 추진배경, 주요내용 및 향후 파급효과를 포함한 300자 내외의 상세 스마트 요약" }
     ],
     "general_issues": [],
     "local_issues": [],
@@ -312,7 +313,7 @@ function buildHtmlEmailBody(aiResult, todayStr) {
         <span style="background-color: ${categoryBg}; color: ${categoryColor}; font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 12px; margin-right: 8px; display: inline-block; vertical-align: middle;">${item.pressName}</span>
         <a href="${item.link}" target="_blank" style="color: #0f172a; text-decoration: none; vertical-align: middle;">${item.title}</a>
       </div>
-      <div style="font-size: 14px; color: #334155; line-height: 1.65; background-color: #f8fafc; border-radius: 6px; padding: 12px 14px; margin-top: 10px; border: 1px solid #f1f5f9;">
+      <div style="font-size: 14px; color: #334155; line-height: 1.7; background-color: #f8fafc; border-radius: 6px; padding: 14px 16px; margin-top: 10px; border: 1px solid #f1f5f9;">
         <strong style="color: ${categoryColor};">💡 핵심 요약:</strong> ${item.summary}
       </div>
     </div>
@@ -333,16 +334,38 @@ function buildHtmlEmailBody(aiResult, todayStr) {
         <h1 style="margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3;">${todayStr} 강원특별자치도 현안 뉴스 스크랩</h1>
       </div>
       <div style="padding: 28px 24px;">
-        <!-- 오늘의 핵심 브리핑 -->
+        <!-- 1. 오늘의 종합 브리핑 -->
         <div style="background-color: #f0fdf4; border: 1px solid #bbf7d0; border-left: 6px solid #059669; border-radius: 10px; padding: 22px; margin-bottom: 28px;">
-          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #065f46; font-weight: 800;">📌 오늘의 종합 브리핑</h2>
+          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #065f46; font-weight: 800;">📌 1. 오늘의 종합 브리핑</h2>
           <p style="margin: 0; font-size: 15px; line-height: 1.75; color: #0f172a; white-space: pre-line; font-weight: 500;">${briefing}</p>
         </div>
 
-        <!-- Top 1 핵심현안 도정 대응방안 심층 보고서 -->
+        <!-- 2. 기사 목록 (목차) -->
+        <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 22px; margin-bottom: 32px;">
+          <h2 style="margin-top: 0; font-size: 19px; color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px; font-weight: 800; margin-bottom: 16px;">📋 2. 기사 목록</h2>
+          <h3 style="color: #2563eb; font-size: 16px; margin: 14px 0 8px 0; font-weight: 800;">(1) 핵심현안 (${coreList.length}건)</h3>
+          <ol style="padding-left: 20px; margin: 0;">${coreList.map(renderTocItem).join('')}</ol>
+          <h3 style="color: #0284c7; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(2) 일반이슈 (${generalList.length}건)</h3>
+          <ol style="padding-left: 20px; margin: 0;">${generalList.map(renderTocItem).join('')}</ol>
+          <h3 style="color: #059669; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(3) 시군이슈 (${localList.length}건)</h3>
+          <ol style="padding-left: 20px; margin: 0;">${localList.map(renderTocItem).join('')}</ol>
+          <h3 style="color: #0d9488; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(4) 사회 / 문화 / 교육 이슈 (${eduList.length}건)</h3>
+          <ol style="padding-left: 20px; margin: 0;">${eduList.map(renderTocItem).join('')}</ol>
+        </div>
+
+        <!-- 3. 기사 요약 (카테고리별 스마트 요약) -->
+        <div style="margin-bottom: 32px;">
+          <h2 style="margin-top: 0; font-size: 20px; color: #0f172a; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 20px; font-weight: 800;">🔍 3. 기사 카테고리별 스마트 요약</h2>
+          ${coreList.length > 0 ? `<h3 style="color: #2563eb; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #2563eb; padding-left: 8px;">■ 핵심현안</h3>` + coreList.map(item => renderSummaryCard(item, '#2563eb', '#eff6ff')).join('') : ''}
+          ${generalList.length > 0 ? `<h3 style="color: #0284c7; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0284c7; padding-left: 8px;">■ 일반이슈</h3>` + generalList.map(item => renderSummaryCard(item, '#0284c7', '#f0f9ff')).join('') : ''}
+          ${localList.length > 0 ? `<h3 style="color: #059669; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #059669; padding-left: 8px;">■ 시군이슈</h3>` + localList.map(item => renderSummaryCard(item, '#059669', '#ecfdf5')).join('') : ''}
+          ${eduList.length > 0 ? `<h3 style="color: #0d9488; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0d9488; padding-left: 8px;">■ 사회/문화/교육</h3>` + eduList.map(item => renderSummaryCard(item, '#0d9488', '#f0fdfa')).join('') : ''}
+        </div>
+
+        <!-- 4. 심층 보고서 (Top 1 핵심현안 도정 대응방안 심층 보고서) -->
         ${plan.target_title ? `
         <div style="background-color: #eff6ff; border: 1px solid #bfdbfe; border-left: 6px solid #2563eb; border-radius: 10px; padding: 22px; margin-bottom: 28px;">
-          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #1e40af; font-weight: 800;">📋 [Top 1 현안] 도정 대응방안 심층 보고서</h2>
+          <h2 style="margin-top: 0; margin-bottom: 12px; font-size: 19px; color: #1e40af; font-weight: 800;">📋 4. [Top 1 현안] 도정 대응방안 심층 보고서</h2>
           <div style="font-size: 15px; font-weight: 700; color: #1e293b; margin-bottom: 14px;">🎯 대상 기사: ${plan.target_title}</div>
           
           <div style="margin-bottom: 14px;">
@@ -368,28 +391,6 @@ function buildHtmlEmailBody(aiResult, todayStr) {
           </div>
         </div>
         ` : ''}
-
-        <!-- 목차 -->
-        <div style="background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 22px; margin-bottom: 32px;">
-          <h2 style="margin-top: 0; font-size: 19px; color: #1e3a8a; border-bottom: 2px solid #2563eb; padding-bottom: 10px; font-weight: 800; margin-bottom: 16px;">📋 기사 목차</h2>
-          <h3 style="color: #2563eb; font-size: 16px; margin: 14px 0 8px 0; font-weight: 800;">(1) 핵심현안 (${coreList.length}건)</h3>
-          <ol style="padding-left: 20px; margin: 0;">${coreList.map(renderTocItem).join('')}</ol>
-          <h3 style="color: #0284c7; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(2) 일반이슈 (${generalList.length}건)</h3>
-          <ol style="padding-left: 20px; margin: 0;">${generalList.map(renderTocItem).join('')}</ol>
-          <h3 style="color: #059669; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(3) 시군이슈 (${localList.length}건)</h3>
-          <ol style="padding-left: 20px; margin: 0;">${localList.map(renderTocItem).join('')}</ol>
-          <h3 style="color: #0d9488; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(4) 사회 / 문화 / 교육 이슈 (${eduList.length}건)</h3>
-          <ol style="padding-left: 20px; margin: 0;">${eduList.map(renderTocItem).join('')}</ol>
-        </div>
-
-        <!-- 스마트 요약 -->
-        <div>
-          <h2 style="margin-top: 0; font-size: 20px; color: #0f172a; border-bottom: 2px solid #059669; padding-bottom: 10px; margin-bottom: 20px; font-weight: 800;">🔍 기사 카테고리별 스마트 요약</h2>
-          ${coreList.length > 0 ? `<h3 style="color: #2563eb; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #2563eb; padding-left: 8px;">■ 핵심현안</h3>` + coreList.map(item => renderSummaryCard(item, '#2563eb', '#eff6ff')).join('') : ''}
-          ${generalList.length > 0 ? `<h3 style="color: #0284c7; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0284c7; padding-left: 8px;">■ 일반이슈</h3>` + generalList.map(item => renderSummaryCard(item, '#0284c7', '#f0f9ff')).join('') : ''}
-          ${localList.length > 0 ? `<h3 style="color: #059669; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #059669; padding-left: 8px;">■ 시군이슈</h3>` + localList.map(item => renderSummaryCard(item, '#059669', '#ecfdf5')).join('') : ''}
-          ${eduList.length > 0 ? `<h3 style="color: #0d9488; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0d9488; padding-left: 8px;">■ 사회/문화/교육</h3>` + eduList.map(item => renderSummaryCard(item, '#0d9488', '#f0fdfa')).join('') : ''}
-        </div>
       </div>
       <div style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px; text-align: center; font-size: 13px; color: #64748b;">
         강원특별자치도 AI 정책분석관 자동화 보고서 (GitHub Actions)
