@@ -537,9 +537,10 @@ async function runGangwonNewsBot() {
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
-    try {
+    /* try {
       await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
     } catch (mailErr) {}
+    */
     process.exit(1);
   }
 }
