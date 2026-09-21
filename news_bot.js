@@ -272,18 +272,20 @@ async function processNewsWithGeminiAI(articlesWithContent) {
             console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
             return JSON.parse(candidate.content.parts[0].text);
           }
-        } else if (response.status === 503) {
-          await sleep(retry * 3000);
+        } else if (response.status === 503 || response.status === 429) {
+          lastError = `Google API 서버 과부하/속도제한 [HTTP ${response.status}]`;
         } else {
           const errText = await response.text();
-          lastError = 'Gemini API 오류 [HTTP ' + response.status + ']: ' + errText;
+          lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
+          break; // 400, 401 등 복구 불가능한 에러는 재시도 없이 중단
         }
       } catch (err) {
-        lastError = 'Gemini 처리 예외: ' + err.message;
+        lastError = 'Gemini 통신 예외: ' + err.message;
       }
+
       if (retry < 3) {
         const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
-        console.log(`⏳ 일시적 오류 발생, ${waitSec}초 후 다시 시도합니다...`);
+        console.log(`⏳ 일시적 오류(${lastError}), ${waitSec}초 후 다시 시도합니다...`);
         await sleep(waitSec * 1000);
       }
     }
