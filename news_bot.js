@@ -277,12 +277,14 @@ async function processNewsWithGeminiAI(articlesWithContent) {
         } else {
           const errText = await response.text();
           lastError = 'Gemini API 오류 [HTTP ' + response.status + ']: ' + errText;
-          break;
         }
       } catch (err) {
         lastError = 'Gemini 처리 예외: ' + err.message;
-        break;
       }
+      if (retry < 3) {
+        const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
+        console.log(`⏳ 일시적 오류 발생, ${waitSec}초 후 다시 시도합니다...`);
+        await sleep(waitSec * 1000);
     }
   }
 
