@@ -188,8 +188,8 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 const modelsToTry = [
     'gemini-2.5-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro'
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash'
   ];
 
   const systemPrompt = `
@@ -269,7 +269,7 @@ const modelsToTry = [
   let lastError = null;
 
   for (const modelName of modelsToTry) {
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+      const url = 'https://generativelanguage.googleapis.com/v1/models/' + modelName + ':generateContent?key=' + apiKey;
 
     for (let retry = 1; retry <= 3; retry++) {
       console.log('🤖 Gemini AI [' + modelName + '] 분석 및 대응방안 보고서 작성 중... (시도 ' + retry + '/3)');
