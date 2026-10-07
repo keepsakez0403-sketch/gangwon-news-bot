@@ -124,7 +124,7 @@ async function collectNaverNews() {
     });
   }
 
-  const final45Articles = rawArticles.slice(0, 45);
+  const final45Articles = rawArticles.slice(0, 38);
   console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final45Articles.length + '건');
   return final45Articles;
 }
@@ -163,7 +163,7 @@ async function fetchArticleFullText(articles) {
       }
     } catch (e) {}
 
-    const truncatedContent = fullText.length > 300 ? fullText.substring(0, 300) + '...' : fullText;
+    const truncatedContent = fullText.length > 300 ? fullText.substring(0, 230) + '...' : fullText;
 
     return {
       id: idx + 1,
