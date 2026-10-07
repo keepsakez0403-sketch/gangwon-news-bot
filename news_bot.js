@@ -125,7 +125,7 @@ async function collectNaverNews() {
   }
 
   // 기사 수: 40건으로 설정
-  const finalArticles = rawArticles.slice(0, 40);
+  const finalArticles = rawArticles.slice(0, 45);
   console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + finalArticles.length + '건');
   return finalArticles;
 }
