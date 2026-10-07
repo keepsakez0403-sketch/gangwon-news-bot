@@ -124,9 +124,10 @@ async function collectNaverNews() {
     });
   }
 
-  const final45Articles = rawArticles.slice(0, 38);
-  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final45Articles.length + '건');
-  return final45Articles;
+  // 기사 수: 40건으로 설정
+  const finalArticles = rawArticles.slice(0, 40);
+  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + finalArticles.length + '건');
+  return finalArticles;
 }
 
 async function fetchArticleFullText(articles) {
@@ -135,7 +136,7 @@ async function fetchArticleFullText(articles) {
   const excludeKeywords = [
     '날씨', '기온', '무더위', '열대야', '비소식', '낮에는',
     '음주운전', '마약', '절도', '입건', '체포', '고발', '소방',
-    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집','시상식','을지연습'
+    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집', '시상식', '을지연습'
   ];
 
   const filteredArticles = articles.filter(article => {
@@ -163,7 +164,8 @@ async function fetchArticleFullText(articles) {
       }
     } catch (e) {}
 
-    const truncatedContent = fullText.length > 300 ? fullText.substring(0, 230) + '...' : fullText;
+    // 기사 글자 수: 300자로 설정
+    const truncatedContent = fullText.length > 300 ? fullText.substring(0, 300) + '...' : fullText;
 
     return {
       id: idx + 1,
@@ -186,10 +188,36 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-const modelsToTry = [
-    'gemini-3.8-flash',
-    'gemini-3.8-flash-lite'
-  ];
+  // 사용자의 계정/키에서 실제 지원되는 모델 목록을 조회하여 404 원천 차단
+  let targetModels = [];
+  try {
+    const listRes = await fetch('https://generativelanguage.googleapis.com/v1beta/models?key=' + apiKey);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      const validModels = (listData.models || [])
+        .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+        .map(m => m.name.replace('models/', ''));
+      
+      console.log('📋 현재 API 키에서 사용 가능한 모델 목록:', validModels.join(', '));
+      
+      // Flash 계열 우선 정렬 (flash 모델 -> 일반 모델 순)
+      const flashModels = validModels.filter(m => m.includes('flash'));
+      const otherModels = validModels.filter(m => !m.includes('flash'));
+      targetModels = [...flashModels, ...otherModels];
+    }
+  } catch (e) {
+    console.log('⚠️ 모델 목록 사전 조회 실패:', e.message);
+  }
+
+  // 사전 조회가 실패했거나 비어있을 경우를 대비한 안전 기본 풀
+  if (targetModels.length === 0) {
+    targetModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ];
+  }
 
   const systemPrompt = `
 당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
@@ -197,7 +225,6 @@ const modelsToTry = [
 
 [보고서 작성 문체 원칙]
 - 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
-
 
 [누적 개선 지침 및 주의사항 (자가 피드백)]
 - 피드백 1: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
@@ -267,11 +294,11 @@ const modelsToTry = [
 
   let lastError = null;
 
-  for (const modelName of modelsToTry) {
-      const url = 'https://generativelanguage.googleapis.com/v1/models/' + modelName + ':generateContent?key=' + apiKey;
+  for (const modelName of targetModels) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
 
-    for (let retry = 1; retry <= 3; retry++) {
-      console.log('🤖 Gemini AI [' + modelName + '] 분석 및 대응방안 보고서 작성 중... (시도 ' + retry + '/3)');
+    for (let retry = 1; retry <= 2; retry++) {
+      console.log(`🤖 Gemini AI [${modelName}] 분석 시도 중... (시도 ${retry}/2)`);
 
       try {
         const response = await fetch(url, {
@@ -284,29 +311,33 @@ const modelsToTry = [
           const jsonResponse = await response.json();
           const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
           if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-            console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
+            console.log(`✅ [${modelName}] 현안 분석 및 대응방안 심층 보고서 생성 완료!`);
             return JSON.parse(candidate.content.parts[0].text);
           }
-        } else if (response.status === 503 || response.status === 429) {
-          lastError = `Google API 서버 과부하/속도제한 [HTTP ${response.status}]`;
         } else {
-          const errText = await response.text();
-          lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
-          break; // 400, 401 등 복구 불가능한 에러는 재시도 없이 중단
+          const status = response.status;
+          const errDetail = await response.text();
+          lastError = `[${modelName}] HTTP ${status}: ${errDetail.substring(0, 150)}`;
+          console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}]`);
+          
+          // 404(모델 없음)는 재시도 없이 즉시 다음 모델로 전환
+          if (status === 404) {
+            break;
+          }
         }
       } catch (err) {
-        lastError = 'Gemini 통신 예외: ' + err.message;
+        lastError = `[${modelName}] 통신 예외: ${err.message}`;
+        console.log(`⚠️ ${lastError}`);
       }
 
-      if (retry < 3) {
-        const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
-        console.log(`⏳ 일시적 오류(${lastError}), ${waitSec}초 후 다시 시도합니다...`);
-        await sleep(waitSec * 1000);
+      if (retry < 2) {
+        await sleep(5000);
       }
     }
+    console.log(`🔄 다음 대체 모델로 전환합니다...`);
   }
   
-  throw new Error('❌ Gemini AI 분석 실패: ' + lastError);
+  throw new Error('❌ 모든 사용 가능 모델 호출 실패: ' + lastError);
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
@@ -490,7 +521,7 @@ async function sendTelegramMessage(aiResult, todayStr) {
     console.log('🎉 [성공] 텔레그램 1차 브리핑 메시지 발송 완료!');
   } catch (err) {}
 
-  // 2번 메시지: Top 1 현안 대응방안 심층 보고서 (요청하신 4대 서식 및 공문서 체 적용)
+  // 2번 메시지: Top 1 현안 대응방안 심층 보고서
   if (plan.target_title) {
     let msg2 = `📋 <b>[Top 1 현안] 도정 대응방안 심층 보고서</b>\n\n`;
     msg2 += `🎯 <b>대상기사:</b> ${plan.target_title}\n\n`;
@@ -557,10 +588,6 @@ async function runGangwonNewsBot() {
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
-    /* try {
-      await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
-    } catch (mailErr) {}
-    */
     process.exit(1);
   }
 }
