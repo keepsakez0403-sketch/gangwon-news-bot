@@ -124,9 +124,10 @@ async function collectNaverNews() {
     });
   }
 
-  const final45Articles = rawArticles.slice(0, 45);
-  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final45Articles.length + '건');
-  return final45Articles;
+  // 기사 수를 40건으로 정밀 조정하여 구글 API 페이로드 최적화
+  const final40Articles = rawArticles.slice(0, 40);
+  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final40Articles.length + '건');
+  return final40Articles;
 }
 
 async function fetchArticleFullText(articles) {
@@ -135,7 +136,7 @@ async function fetchArticleFullText(articles) {
   const excludeKeywords = [
     '날씨', '기온', '무더위', '열대야', '비소식', '낮에는',
     '음주운전', '마약', '절도', '입건', '체포', '고발', '소방',
-    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집','시상식','을지연습'
+    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집', '시상식', '을지연습'
   ];
 
   const filteredArticles = articles.filter(article => {
@@ -163,6 +164,7 @@ async function fetchArticleFullText(articles) {
       }
     } catch (e) {}
 
+    // 본문 길이를 300자로 최적화하여 내용 전달력과 503 과부하 방지를 동시 확보
     const truncatedContent = fullText.length > 300 ? fullText.substring(0, 300) + '...' : fullText;
 
     return {
@@ -186,7 +188,12 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  const modelsToTry = ['gemini-3.6-flash'];
+  // 503 과부하 및 속도제한 원천 방지를 위한 검증된 다중 모델 폴백 풀
+  const modelsToTry = [
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.5-flash-lite'
+  ];
 
   const systemPrompt = `
 당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
@@ -194,7 +201,6 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 [보고서 작성 문체 원칙]
 - 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
-
 
 [누적 개선 지침 및 주의사항 (자가 피드백)]
 - 피드백 1: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
@@ -266,10 +272,9 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
   for (const modelName of modelsToTry) {
     const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
+    console.log(`🤖 Gemini AI [${modelName}] 모델로 분석을 시도합니다...`);
 
-    for (let retry = 1; retry <= 3; retry++) {
-      console.log('🤖 Gemini AI [' + modelName + '] 분석 및 대응방안 보고서 작성 중... (시도 ' + retry + '/3)');
-
+    for (let retry = 1; retry <= 2; retry++) {
       try {
         const response = await fetch(url, {
           method: 'POST',
@@ -281,29 +286,25 @@ async function processNewsWithGeminiAI(articlesWithContent) {
           const jsonResponse = await response.json();
           const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
           if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-            console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
+            console.log(`✅ Gemini AI [${modelName}] 분석 및 대응방안 심층 보고서 생성 성공!`);
             return JSON.parse(candidate.content.parts[0].text);
           }
-        } else if (response.status === 503 || response.status === 429) {
-          lastError = `Google API 서버 과부하/속도제한 [HTTP ${response.status}]`;
         } else {
-          const errText = await response.text();
-          lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
-          break; // 400, 401 등 복구 불가능한 에러는 재시도 없이 중단
+          lastError = `[${modelName}] HTTP ${response.status}`;
+          console.log(`⚠️ ${lastError} 발생 (시도 ${retry}/2)`);
         }
       } catch (err) {
-        lastError = 'Gemini 통신 예외: ' + err.message;
+        lastError = `[${modelName}] 통신 예외: ${err.message}`;
       }
 
-      if (retry < 3) {
-        const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
-        console.log(`⏳ 일시적 오류(${lastError}), ${waitSec}초 후 다시 시도합니다...`);
-        await sleep(waitSec * 1000);
+      if (retry < 2) {
+        await sleep(10000); // 10초 대기 후 재시도
       }
     }
+    console.log(`🔄 [${modelName}] 실패로 다음 대체 모델로 전환합니다...`);
   }
   
-  throw new Error('❌ Gemini AI 분석 실패: ' + lastError);
+  throw new Error('❌ 모든 Gemini 대체 모델 호출 실패: ' + lastError);
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
@@ -487,7 +488,7 @@ async function sendTelegramMessage(aiResult, todayStr) {
     console.log('🎉 [성공] 텔레그램 1차 브리핑 메시지 발송 완료!');
   } catch (err) {}
 
-  // 2번 메시지: Top 1 현안 대응방안 심층 보고서 (요청하신 4대 서식 및 공문서 체 적용)
+  // 2번 메시지: Top 1 현안 대응방안 심층 보고서
   if (plan.target_title) {
     let msg2 = `📋 <b>[Top 1 현안] 도정 대응방안 심층 보고서</b>\n\n`;
     msg2 += `🎯 <b>대상기사:</b> ${plan.target_title}\n\n`;
@@ -554,10 +555,6 @@ async function runGangwonNewsBot() {
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
-    /* try {
-      await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
-    } catch (mailErr) {}
-    */
     process.exit(1);
   }
 }
