@@ -124,7 +124,7 @@ async function collectNaverNews() {
     });
   }
 
-  // 기사 수: 40건으로 설정
+  // 기사 수: 40건 설정
   const finalArticles = rawArticles.slice(0, 45);
   console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + finalArticles.length + '건');
   return finalArticles;
@@ -188,7 +188,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // 실제 성공이 입증된 텍스트 전용 Flash 최적 모델 우선순위
+  // 성공이 확인된 텍스트 전용 Flash 최적 모델 우선순위
   const candidateModels = [
     'gemini-flash-lite-latest',
     'gemini-3.5-flash-lite',
@@ -196,7 +196,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     'gemini-flash-latest'
   ];
 
-  // AI에게 보낼 기사 데이터 슬림화 (토큰 절약 -> 503/429 차단)
+  // AI에게 보낼 기사 데이터 슬림화 (토큰 절약 -> 503 과부하 방지)
   const slimArticles = articlesWithContent.map(a => ({
     id: a.id,
     pressName: a.pressName,
@@ -242,7 +242,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
    - 각 기사별 스마트 요약("summary"): 핵심 사실, 추진 배경, 향후 영향 등을 포함하여 **공식 보고서체로 300자 내외의 충분히 길고 상세한 요약**으로 작성하세요.
 
 [출력 형식]
-반드시 유효한 JSON 형식으로만 답변하세요. 마크다운 따옴표나 기타 텍스트를 붙이지 마세요:
+반드시 유효한 JSON 형식으로만 답변하세요:
 {
   "today_briefing": "오늘의 종합 브리핑 내용 (보고체)...",
   "action_plan": {
@@ -296,7 +296,6 @@ async function processNewsWithGeminiAI(articlesWithContent) {
         if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
           let rawText = candidate.content.parts[0].text.trim();
           
-          // 마크다운 코드블록 제거 안전장치
           if (rawText.startsWith('```json')) {
             rawText = rawText.replace(/^```json/, '').replace(/```$/, '').trim();
           } else if (rawText.startsWith('```')) {
@@ -304,7 +303,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
           }
 
           const parsed = JSON.parse(rawText);
-          console.log(`✅ [${modelName}] 분석 및 대응방안 보고서 파싱 성공!`);
+          console.log(`✅ [${modelName}] 분석 및 대응방안 보고서 생성 및 파싱 완료!`);
           
           // 원본 기사의 link와 pubDate 복원
           const articleMap = new Map(articlesWithContent.map(a => [a.id, a]));
@@ -328,224 +327,17 @@ async function processNewsWithGeminiAI(articlesWithContent) {
         const status = response.status;
         const errDetail = await response.text();
         lastError = `[${modelName}] HTTP ${status}: ${errDetail.substring(0, 100)}`;
-        console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}], 다음 대체 모델로 전환합니다.`);
+        console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}], 다음 모델로 전환합니다.`);
       }
     } catch (err) {
       lastError = `[${modelName}] 파싱/통신 예외: ${err.message}`;
       console.log(`⚠️ ${lastError}`);
     }
 
-    // 서버 부하 완화를 위해 2초 대기 후 다음 모델 시도
     await sleep(2000);
   }
 
   throw new Error('❌ 모든 후보 모델 호출 실패: ' + lastError);
-}
-    ],
-    "general_issues": [],
-    "local_issues": [],
-    "social_culture_edu": []
-  }
-}
-`;
-
-  const payload = {
-    contents: [
-      { parts: [{ text: systemPrompt + "\n\n[분석할 기사 목록]\n" + JSON.stringify(slimArticles) }] }
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json"
-    }
-  };
-
-  let lastError = null;
-
-  for (const modelName of candidateModels) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-
-    console.log(`🤖 Gemini AI [${modelName}] 분석 시도 중...`);
-
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        const jsonResponse = await response.json();
-        const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
-        if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-          console.log(`✅ [${modelName}] 분석 및 대응방안 보고서 생성 완료!`);
-          
-          const parsed = JSON.parse(candidate.content.parts[0].text);
-          
-          // 원본 기사의 link와 pubDate를 id 기준으로 완벽 복원
-          const articleMap = new Map(articlesWithContent.map(a => [a.id, a]));
-          if (parsed.categories) {
-            for (const key of Object.keys(parsed.categories)) {
-              if (Array.isArray(parsed.categories[key])) {
-                parsed.categories[key] = parsed.categories[key].map(item => {
-                  const original = articleMap.get(item.id);
-                  return {
-                    ...item,
-                    link: original ? original.link : (item.link || '#'),
-                    pubDate: original ? original.pubDate : (item.pubDate || '')
-                  };
-                });
-              }
-            }
-          }
-          return parsed;
-        }
-      } else {
-        const status = response.status;
-        const errDetail = await response.text();
-        lastError = `[${modelName}] HTTP ${status}: ${errDetail.substring(0, 100)}`;
-        console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}], 다음 모델로 즉시 전환합니다.`);
-      }
-    } catch (err) {
-      lastError = `[${modelName}] 통신 예외: ${err.message}`;
-      console.log(`⚠️ ${lastError}`);
-    }
-
-    // 과부하 방지를 위해 3초 대기 후 다음 모델 시도
-    await sleep(3000);
-  }
-
-  throw new Error('❌ 사용 가능한 모델 호출 실패: ' + lastError);
-}
-
-  // 사전 조회가 실패했거나 비어있을 경우를 대비한 안전 기본 풀
-  if (targetModels.length === 0) {
-    targetModels = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro'
-    ];
-  }
-
-  const systemPrompt = `
-당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
-제공된 기사 목록을 분석하여 강원도 행정/정책 현안 뉴스 스크랩 보고서 및 Top 1 기사에 대한 [도정 대응방안 심층 보고서]를 작성하세요.
-
-[보고서 작성 문체 원칙]
-- 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
-
-[누적 개선 지침 및 주의사항 (자가 피드백)]
-- 피드백 1: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
-- 피드백 2: Top 1 대응전략(action_strategies)은 추상적인 문구를 지양하고, TF팀 신설, MOU체결 문구도 지양, 중앙부처(기재부, 행안부 등), 국회 대응 일정을 명시할 것
-- 피드백 4 (Top 1 선정 기준): 단순 지자체 홍보성 기사는 배제하고, '강원특별법 개정안/특례', '국비 예산 확보', '주요 SOC/미래산업(반도체·바이오·수소·AI,데이터센터, 메가프로젝트, 중앙부처 연계 사업) 등 도정 현안 직결 기사를 최우선 지정할 것
-- 피드백 5 (보고서 종결 어미 엄수): 모든 요약문 및 보고서 문장은 반드시 공문서 표준 개조식 종결 어미(~함, ~임, ~추진, ~계획, ~필요 등)로 통일하고 '~습니다', '~됩니다' 같은 구어체 종결 어미는 전면 배제할 것
-- 피드백 6 (카테고리 분류 정밀화): 도 전체에 파급력이 있는 법안·예산·산업 이슈는 '핵심현안', 기초지자체(18개 시·군) 단위의 국지적 사업 등은 반드시 '시군이슈'로 엄격히 분리할 것
-- 피드백 8 (중복 및 유사 보도 압축 선별): 동일한 보도자료나 브리핑을 여러 언론사가 중복 보도한 경우, 가장 심층적인 기사 1건만 선별하고 중복 기사는 선별 목록 제외할 것
-- 피드백 9 (정치·정쟁 기사 후순위화): 여야 정당 간 단순 공방, 비방성 성명 발표, 선거 관련 정쟁 이슈는 도정 대응 실익이 적으므로 핵심현안이나 Top 1에서 배제하고 일반이슈 후순위로 배치할 것
-- 피드백 13 (타 지자체 동향 및 비교 분석): 메가프로젝트(반도체, 바이오, 데이터센터, 바이오특화단지 등) 유치·지정 이슈의 경우, 경쟁 지자체(전북, 제주, 세종 등)의 추진 동향 및 강원만의 차별화된 비교 우위 논리를 시사점에 포함할 것
-- 피드백 15 (관련 법안 조항 및 특례 구체화): '강원특별법' 관련 이슈 분석 시 단순히 '특별법 개정 추진'으로 끝내지 말고, 기사에 언급되거나 연계된 '특례 조항(또는 세부 특례 분야: 산림, 농업, 군사, 환경)'를 요약 및 대응전략에 명시할 것
-
-[수행 지침]
-1. 뉴스 선별 (22~25건 최종 선별):
-   - 핵심 키워드: 강원특별법, 특별법, 강원도지사, 데이터센터, 반도체, 바이오, SOC, 특례, 도정, 도의회, 강원특별자치도, AI, 우상호 등
-   - 제외: 기상, 날씨, 단순 사건/사고, 재난뉴스, 소방 등
-
-2. Top 1 핵심 기사 지정 및 대응방안 심층 보고서 작성 ("action_plan"):
-   - 수집된 기사 중 강원도정에 파급력이 가장 크거나 대응이 가장 시급한 Top 1 기사를 무조건 1개 지정합니다.(Top 1 기사는 제목에 "사설","시론","발언대","의정칼럼","월요칼럼","대청봉","확대경" 은 "general_issues"의 후순위로 해주고 top 1과 현안기사, "core_issues" 에는 선정하지마)
-   - 실무 공무원 시각에서 지휘부에 보고하는 형태로 다음 4개 항목을 심층적으로 작성하세요:
-     1) "target_title": 대상 기사 제목 및 언론사 (예: [강원일보] 기사 제목)
-     2) "issue_overview": 1. 기사 주요내용 (핵심 사실관계 및 현안 요약, 보고체)
-     3) "policy_implication": 2. 도정 시사점 (도정에 미치는 파급효과 및 행정적 의미, 보고체)
-     4) "action_strategies": 3. 대응전략 (단기/중기/장기 단계별 구체적 실행 방안 3가지 이상, 보고체)
-     5) "risk_management": 4. 리스크 관리방안 (예상되는 우려사항, 타지자체 견제, 국회 상황 대응 대책, 보고체)
-
-3. 카테고리 분류 및 스크랩 브리핑:
-   - "today_briefing": 오늘의 종합 브리핑 (보고서체, 200자 내외).
-   - 카테고리: "core_issues", "general_issues", "local_issues", "social_culture_edu"
-   - 각 기사별 스마트 요약("summary"): 핵심 사실, 추진 배경, 향후 영향 등을 포함하여 **공식 보고서체로 300자 내외의 충분히 길고 상세한 요약**으로 작성하세요.
-
-[출력 형식]
-반드시 아래 JSON 구조로만 답변하세요:
-{
-  "today_briefing": "오늘의 종합 브리핑 내용 (보고체)...",
-  "action_plan": {
-    "target_title": "[강원일보] 기사 제목 예시",
-    "issue_overview": "현안 핵심 사실관계 요약 내용...",
-    "policy_implication": "도정 파급효과 및 행정적 시사점...",
-    "action_strategies": [
-      "• 1단계(즉시 대응): 단기 조치 및 지휘부 보고 사항...",
-      "• 2단계(실국 협의): 중기 관련 부서 협의 및 조례 제정 추진...",
-      "• 3단계(제도 개선): 법안 통과 및 국비 확보 연계 전략..."
-    ],
-    "risk_management": "예상 우려사항 및 단계별 리스크 차단 대책..."
-  },
-  "categories": {
-    "core_issues": [
-      { "id": 1, "pressName": "언론사", "title": "제목", "pubDate": "날짜", "link": "URL", "summary": "기사의 추진배경, 주요내용 및 향후 파급효과를 포함한 300자 내외의 상세 스마트 요약" }
-    ],
-    "general_issues": [],
-    "local_issues": [],
-    "social_culture_edu": []
-  }
-}
-`;
-
-  const payload = {
-    contents: [
-      { parts: [{ text: systemPrompt + "\n\n[분석할 기사 목록]\n" + JSON.stringify(articlesWithContent) }] }
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      responseMimeType: "application/json"
-    }
-  };
-
-  let lastError = null;
-
-  for (const modelName of targetModels) {
-    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
-
-    for (let retry = 1; retry <= 2; retry++) {
-      console.log(`🤖 Gemini AI [${modelName}] 분석 시도 중... (시도 ${retry}/2)`);
-
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (response.ok) {
-          const jsonResponse = await response.json();
-          const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
-          if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-            console.log(`✅ [${modelName}] 현안 분석 및 대응방안 심층 보고서 생성 완료!`);
-            return JSON.parse(candidate.content.parts[0].text);
-          }
-        } else {
-          const status = response.status;
-          const errDetail = await response.text();
-          lastError = `[${modelName}] HTTP ${status}: ${errDetail.substring(0, 150)}`;
-          console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}]`);
-          
-          // 404(모델 없음)는 재시도 없이 즉시 다음 모델로 전환
-          if (status === 404) {
-            break;
-          }
-        }
-      } catch (err) {
-        lastError = `[${modelName}] 통신 예외: ${err.message}`;
-        console.log(`⚠️ ${lastError}`);
-      }
-
-      if (retry < 2) {
-        await sleep(5000);
-      }
-    }
-    console.log(`🔄 다음 대체 모델로 전환합니다...`);
-  }
-  
-  throw new Error('❌ 모든 사용 가능 모델 호출 실패: ' + lastError);
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
