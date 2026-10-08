@@ -124,10 +124,9 @@ async function collectNaverNews() {
     });
   }
 
-  // 기사 수: 40건 설정
-  const finalArticles = rawArticles.slice(0, 45);
-  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + finalArticles.length + '건');
-  return finalArticles;
+  const final45Articles = rawArticles.slice(0, 45);
+  console.log('✅ 1차 네이버 뉴스 수집 완료: 총 ' + final45Articles.length + '건');
+  return final45Articles;
 }
 
 async function fetchArticleFullText(articles) {
@@ -136,7 +135,7 @@ async function fetchArticleFullText(articles) {
   const excludeKeywords = [
     '날씨', '기온', '무더위', '열대야', '비소식', '낮에는',
     '음주운전', '마약', '절도', '입건', '체포', '고발', '소방',
-    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집', '시상식', '을지연습'
+    '주가', '증권', '유상증자', '포토뉴스', '특산품', '시식', '맛집','시상식','을지연습'
   ];
 
   const filteredArticles = articles.filter(article => {
@@ -164,7 +163,6 @@ async function fetchArticleFullText(articles) {
       }
     } catch (e) {}
 
-    // 기사 글자 수: 300자로 설정
     const truncatedContent = fullText.length > 300 ? fullText.substring(0, 300) + '...' : fullText;
 
     return {
@@ -188,21 +186,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  // 성공이 확인된 텍스트 전용 Flash 최적 모델 우선순위
-  const candidateModels = [
-    'gemini-flash-lite-latest',
-    'gemini-3.5-flash-lite',
-    'gemini-3.5-flash',
-    'gemini-flash-latest'
-  ];
-
-  // AI에게 보낼 기사 데이터 슬림화 (토큰 절약 -> 503 과부하 방지)
-  const slimArticles = articlesWithContent.map(a => ({
-    id: a.id,
-    pressName: a.pressName,
-    title: a.title,
-    content: a.content
-  }));
+  const modelsToTry = ['gemini-3.6-flash'];
 
   const systemPrompt = `
 당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
@@ -210,6 +194,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 [보고서 작성 문체 원칙]
 - 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
+
 
 [누적 개선 지침 및 주의사항 (자가 피드백)]
 - 피드백 1: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
@@ -224,7 +209,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 [수행 지침]
 1. 뉴스 선별 (22~25건 최종 선별):
-   - 핵심 키워드: 강원특별법, 특별법, 강원도지사, 데이터센터, 반도체, 바이오, SOC, 특례, 도정, 도의회, 강원특별자치도, AI 등
+   - 핵심 키워드: 강원특별법, 특별법, 강원도지사, 데이터센터, 반도체, 바이오, SOC, 특례, 도정, 도의회, 강원특별자치도, AI, 우상호 등
    - 제외: 기상, 날씨, 단순 사건/사고, 재난뉴스, 소방 등
 
 2. Top 1 핵심 기사 지정 및 대응방안 심층 보고서 작성 ("action_plan"):
@@ -242,7 +227,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
    - 각 기사별 스마트 요약("summary"): 핵심 사실, 추진 배경, 향후 영향 등을 포함하여 **공식 보고서체로 300자 내외의 충분히 길고 상세한 요약**으로 작성하세요.
 
 [출력 형식]
-반드시 유효한 JSON 형식으로만 답변하세요:
+반드시 아래 JSON 구조로만 답변하세요:
 {
   "today_briefing": "오늘의 종합 브리핑 내용 (보고체)...",
   "action_plan": {
@@ -269,7 +254,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
   const payload = {
     contents: [
-      { parts: [{ text: systemPrompt + "\n\n[분석할 기사 목록]\n" + JSON.stringify(slimArticles) }] }
+      { parts: [{ text: systemPrompt + "\n\n[분석할 기사 목록]\n" + JSON.stringify(articlesWithContent) }] }
     ],
     generationConfig: {
       temperature: 0.2,
@@ -279,65 +264,46 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
   let lastError = null;
 
-  for (const modelName of candidateModels) {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
-    console.log(`🤖 Gemini AI [${modelName}] 분석 시도 중...`);
+  for (const modelName of modelsToTry) {
+    const url = 'https://generativelanguage.googleapis.com/v1beta/models/' + modelName + ':generateContent?key=' + apiKey;
 
-    try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
+    for (let retry = 1; retry <= 3; retry++) {
+      console.log('🤖 Gemini AI [' + modelName + '] 분석 및 대응방안 보고서 작성 중... (시도 ' + retry + '/3)');
 
-      if (response.ok) {
-        const jsonResponse = await response.json();
-        const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
-        if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
-          let rawText = candidate.content.parts[0].text.trim();
-          
-          if (rawText.startsWith('```json')) {
-            rawText = rawText.replace(/^```json/, '').replace(/```$/, '').trim();
-          } else if (rawText.startsWith('```')) {
-            rawText = rawText.replace(/^```/, '').replace(/```$/, '').trim();
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (response.ok) {
+          const jsonResponse = await response.json();
+          const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
+          if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
+            console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
+            return JSON.parse(candidate.content.parts[0].text);
           }
-
-          const parsed = JSON.parse(rawText);
-          console.log(`✅ [${modelName}] 분석 및 대응방안 보고서 생성 및 파싱 완료!`);
-          
-          // 원본 기사의 link와 pubDate 복원
-          const articleMap = new Map(articlesWithContent.map(a => [a.id, a]));
-          if (parsed.categories) {
-            for (const key of Object.keys(parsed.categories)) {
-              if (Array.isArray(parsed.categories[key])) {
-                parsed.categories[key] = parsed.categories[key].map(item => {
-                  const original = articleMap.get(item.id);
-                  return {
-                    ...item,
-                    link: original ? original.link : (item.link || '#'),
-                    pubDate: original ? original.pubDate : (item.pubDate || '')
-                  };
-                });
-              }
-            }
-          }
-          return parsed;
+        } else if (response.status === 503 || response.status === 429) {
+          lastError = `Google API 서버 과부하/속도제한 [HTTP ${response.status}]`;
+        } else {
+          const errText = await response.text();
+          lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
+          break; // 400, 401 등 복구 불가능한 에러는 재시도 없이 중단
         }
-      } else {
-        const status = response.status;
-        const errDetail = await response.text();
-        lastError = `[${modelName}] HTTP ${status}: ${errDetail.substring(0, 100)}`;
-        console.log(`⚠️ ${modelName} 호출 실패 [HTTP ${status}], 다음 모델로 전환합니다.`);
+      } catch (err) {
+        lastError = 'Gemini 통신 예외: ' + err.message;
       }
-    } catch (err) {
-      lastError = `[${modelName}] 파싱/통신 예외: ${err.message}`;
-      console.log(`⚠️ ${lastError}`);
+
+      if (retry < 3) {
+        const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
+        console.log(`⏳ 일시적 오류(${lastError}), ${waitSec}초 후 다시 시도합니다...`);
+        await sleep(waitSec * 1000);
+      }
     }
-
-    await sleep(2000);
   }
-
-  throw new Error('❌ 모든 후보 모델 호출 실패: ' + lastError);
+  
+  throw new Error('❌ Gemini AI 분석 실패: ' + lastError);
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
@@ -521,7 +487,7 @@ async function sendTelegramMessage(aiResult, todayStr) {
     console.log('🎉 [성공] 텔레그램 1차 브리핑 메시지 발송 완료!');
   } catch (err) {}
 
-  // 2번 메시지: Top 1 현안 대응방안 심층 보고서
+  // 2번 메시지: Top 1 현안 대응방안 심층 보고서 (요청하신 4대 서식 및 공문서 체 적용)
   if (plan.target_title) {
     let msg2 = `📋 <b>[Top 1 현안] 도정 대응방안 심층 보고서</b>\n\n`;
     msg2 += `🎯 <b>대상기사:</b> ${plan.target_title}\n\n`;
@@ -588,6 +554,10 @@ async function runGangwonNewsBot() {
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
+    /* try {
+      await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
+    } catch (mailErr) {}
+    */
     process.exit(1);
   }
 }
