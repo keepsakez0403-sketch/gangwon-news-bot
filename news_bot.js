@@ -186,7 +186,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     throw new Error('❌ GEMINI_API_KEY가 설정되지 않았습니다.');
   }
 
-  const modelsToTry = ['Gemini 3.5 Flash Lite'];
+  const modelsToTry = ['gemini-3.5-flash-lite'];
 
   const systemPrompt = `
 당신은 강원특별자치도 정책 및 도정 언론 동향 분석 전담 수석 AI 정책분석관입니다.
