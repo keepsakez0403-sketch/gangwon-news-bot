@@ -15,6 +15,10 @@ const NAVER_PRESS_CODE_MAP = {
   '119': '데일리안', '031': '아이뉴스24', '629': '더팩트', '143': '쿠키뉴스'
 };
 
+const OPINION_PREFIXES = [
+  '[사설]', '[시론]', '[발언대]', '의정칼럼', '월요칼럼', '대청봉', '확대경'
+];
+
 function cleanHtmlTags(str) {
   if (!str) return '';
   return str
@@ -42,6 +46,12 @@ function formatDate(date) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function isOpinionArticle(title) {
+  if (!title) return false;
+  const trimmed = title.trim();
+  return OPINION_PREFIXES.some(prefix => trimmed.startsWith(prefix));
 }
 
 async function collectNaverNews() {
@@ -195,14 +205,18 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 [보고서 작성 문체 원칙]
 - 도지사 및 지휘부 보고용 공식 개조식 보고체(~함, ~임, ~추진, ~필요 등)를 엄격히 준수하세요. 구어체나 일반 평서문은 사용하지 마세요.
 
-
 [누적 개선 지침 및 주의사항 (자가 피드백)]
-- 피드백 1: 기사 제목에 "[사설]","[시론]","[발언대]","의정칼럼","월요칼럼","대청봉","확대경" 으로 시작하는 기사는 핵심현안 카테고리에서는 제외/ "core_issues" 에는 절대 넣지마/ 일반이슈에 뒷부분에 배치해줘 "general_issues"의 후순위로 해주고 
-- 피드백 1: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
-- 피드백 2: Top 1 대응전략(action_strategies)은 추상적인 문구를 지양하고, TF팀 신설, MOU체결 문구도 지양, 중앙부처(기재부, 행안부 등), 국회 대응 일정을 명시할 것
-- 피드백 4 (Top 1 선정 기준): 단순 지자체 홍보성 기사는 배제하고, '강원특별법 개정안/특례', '국비 예산 확보', '주요 SOC/미래산업(반도체·바이오·수소·AI,데이터센터, 메가프로젝트, 중앙부처 연계 사업) 등 도정 현안 직결 기사를 최우선 지정할 것
+- 피드백 1 (사설 및 칼럼 전담 분류 필수): 기사 제목에 "[사설]","[시론]","[발언대]","의정칼럼","월요칼럼","대청봉","확대경" 으로 시작하는 기사는 절대로 핵심현안("core_issues")이나 일반이슈("general_issues"), 시군이슈("local_issues")에 넣지 말고, 반드시 새로 생성된 "editorial_column" (사설 및 칼럼) 카테고리에 전담 배치할 것.
+- 피드백 2: 단순 축제, 시상식, 포토뉴스, 동정, 일회성 행사는 기사에서 제외
+- 피드백 3: Top 1 대응전략(action_strategies)은 추상적인 문구를 지양하고, TF팀 신설, MOU체결 문구도 지양, 중앙부처(기재부, 행안부 등), 국회 대응 일정을 명시할 것
+- 피드백 4 (Top 1 선정 기준): 단순 지자체 홍보성 기사는 배제하고, '강원특별법 개정안/특례', '국비 예산 확보', '주요 SOC/미래산업(반도체·바이오·수소·AI,데이터센터, 메가프로젝트, 중앙부처 연계 사업) 등 도정 현안 직결 기사를 최우선 지정할 것. 사설/칼럼성 기사는 Top 1 대상에서 절대 제외할 것.
 - 피드백 5 (보고서 종결 어미 엄수): 모든 요약문 및 보고서 문장은 반드시 공문서 표준 개조식 종결 어미(~함, ~임, ~추진, ~계획, ~필요 등)로 통일하고 '~습니다', '~됩니다' 같은 구어체 종결 어미는 전면 배제할 것
-- 피드백 6 (카테고리 분류 정밀화): 도 전체에 파급력이 있는 법안·예산·산업 이슈는 '핵심현안', 기초지자체(18개 시·군) 단위의 국지적 사업 등은 반드시 '시군이슈'로 엄격히 분리할 것
+- 피드백 6 (카테고리 분류 정밀화):
+  1) "core_issues": 도 전체에 파급력이 있는 법안·예산·산업 핵심 이슈
+  2) "general_issues": 일반 도정 및 일반 행정 이슈
+  3) "local_issues": 기초지자체(18개 시·군) 단위의 국지적 사업 등 시군이슈
+  4) "editorial_column": "[사설]","[시론]","[발언대]","의정칼럼","월요칼럼","대청봉","확대경"으로 시작하는 기사 전용 카테고리 (시군이슈 다음 순서)
+  5) "social_culture_edu": 사회, 문화, 교육 관련 이슈
 - 피드백 8 (중복 및 유사 보도 압축 선별): 동일한 보도자료나 브리핑을 여러 언론사가 중복 보도한 경우, 가장 심층적인 기사 1건만 선별하고 중복 기사는 선별 목록 제외할 것
 - 피드백 9 (정치·정쟁 기사 후순위화): 여야 정당 간 단순 공방, 비방성 성명 발표, 선거 관련 정쟁 이슈는 도정 대응 실익이 적으므로 핵심현안이나 Top 1에서 배제하고 일반이슈 후순위로 배치할 것
 - 피드백 13 (타 지자체 동향 및 비교 분석): 메가프로젝트(반도체, 바이오, 데이터센터, 바이오특화단지 등) 유치·지정 이슈의 경우, 경쟁 지자체(전북, 제주, 세종 등)의 추진 동향 및 강원만의 차별화된 비교 우위 논리를 시사점에 포함할 것
@@ -214,8 +228,8 @@ async function processNewsWithGeminiAI(articlesWithContent) {
    - 제외: 기상, 날씨, 단순 사건/사고, 재난뉴스, 소방 등
 
 2. Top 1 핵심 기사 지정 및 대응방안 심층 보고서 작성 ("action_plan"):
-   - 수집된 기사 중 강원도정에 파급력이 가장 크거나 대응이 가장 시급한 Top 1 기사를 무조건 1개 지정합니다.( 제외 : 기사 제목에 "[사설]","시론","발언대","의정칼럼","월요칼럼","대청봉","확대경" 은 핵심기사로 선정하지마)
-   - 실무 공무원 시각에서 지휘부에 보고하는 형태로 다음 4개 항목을 심층적으로 작성하세요:
+   - 수집된 기사 중 강원도정에 파급력이 가장 크거나 대응이 가장 시급한 Top 1 기사를 무조건 1개 지정합니다. (제외: 기사 제목에 "[사설]","[시론]","[발언대]","의정칼럼","월요칼럼","대청봉","확대경" 은 핵심기사로 선정 불가)
+   - 실무 공무원 시각에서 지휘부에 보고하는 형태로 다음 항목을 심층적으로 작성하세요:
      1) "target_title": 대상 기사 제목 및 언론사
      2) "issue_overview": 1. 기사 주요내용 (핵심 사실관계 및 현안 요약, 보고체)
      3) "policy_implication": 2. 도정 시사점 (도정에 미치는 파급효과 및 행정적 의미, 보고체)
@@ -224,7 +238,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
 
 3. 카테고리 분류 및 스크랩 브리핑:
    - "today_briefing": 오늘의 종합 브리핑 (보고서체, 200자 내외).
-   - 카테고리: "core_issues", "general_issues", "local_issues", "social_culture_edu"
+   - 카테고리 순서: "core_issues", "general_issues", "local_issues", "editorial_column", "social_culture_edu"
    - 각 기사별 스마트 요약("summary"): 핵심 사실, 추진 배경, 향후 영향 등을 포함하여 **공식 보고서체로 300자 내외의 충분히 길고 상세한 요약**으로 작성하세요.
 
 [출력 형식]
@@ -248,6 +262,7 @@ async function processNewsWithGeminiAI(articlesWithContent) {
     ],
     "general_issues": [],
     "local_issues": [],
+    "editorial_column": [],
     "social_culture_edu": []
   }
 }
@@ -283,21 +298,22 @@ async function processNewsWithGeminiAI(articlesWithContent) {
           const candidate = jsonResponse.candidates && jsonResponse.candidates[0];
           if (candidate && candidate.content && candidate.content.parts && candidate.content.parts[0]) {
             console.log('✅ Gemini AI 현안 분석 및 대응방안 심층 보고서 생성 완료!');
-            return JSON.parse(candidate.content.parts[0].text);
+            const parsed = JSON.parse(candidate.content.parts[0].text);
+            return sanitizeAndReclassifyCategories(parsed);
           }
         } else if (response.status === 503 || response.status === 429) {
           lastError = `Google API 서버 과부하/속도제한 [HTTP ${response.status}]`;
         } else {
           const errText = await response.text();
           lastError = `Gemini API 오류 [HTTP ${response.status}]: ${errText}`;
-          break; // 400, 401 등 복구 불가능한 에러는 재시도 없이 중단
+          break;
         }
       } catch (err) {
         lastError = 'Gemini 통신 예외: ' + err.message;
       }
 
       if (retry < 3) {
-        const waitSec = retry * 30; // 1차 실패: 30초, 2차 실패: 60초 대기
+        const waitSec = retry * 30;
         console.log(`⏳ 일시적 오류(${lastError}), ${waitSec}초 후 다시 시도합니다...`);
         await sleep(waitSec * 1000);
       }
@@ -305,6 +321,42 @@ async function processNewsWithGeminiAI(articlesWithContent) {
   }
   
   throw new Error('❌ Gemini AI 분석 실패: ' + lastError);
+}
+
+function sanitizeAndReclassifyCategories(aiResult) {
+  if (!aiResult.categories) {
+    aiResult.categories = {
+      core_issues: [],
+      general_issues: [],
+      local_issues: [],
+      editorial_column: [],
+      social_culture_edu: []
+    };
+  }
+
+  const cats = aiResult.categories;
+  if (!cats.editorial_column) {
+    cats.editorial_column = [];
+  }
+
+  // AI가 다른 카테고리에 분류했더라도 사설/칼럼 접두사가 포함된 기사는 'editorial_column'으로 강제 이동
+  const categoryKeys = ['core_issues', 'general_issues', 'local_issues', 'social_culture_edu'];
+  
+  categoryKeys.forEach(catKey => {
+    if (Array.isArray(cats[catKey])) {
+      const remaining = [];
+      cats[catKey].forEach(item => {
+        if (isOpinionArticle(item.title)) {
+          cats.editorial_column.push(item);
+        } else {
+          remaining.push(item);
+        }
+      });
+      cats[catKey] = remaining;
+    }
+  });
+
+  return aiResult;
 }
 
 function buildHtmlEmailBody(aiResult, todayStr) {
@@ -315,6 +367,7 @@ function buildHtmlEmailBody(aiResult, todayStr) {
   const coreList = cats.core_issues || [];
   const generalList = cats.general_issues || [];
   const localList = cats.local_issues || [];
+  const editorialList = cats.editorial_column || [];
   const eduList = cats.social_culture_edu || [];
 
   const renderTocItem = (item) => `
@@ -367,7 +420,9 @@ function buildHtmlEmailBody(aiResult, todayStr) {
           <ol style="padding-left: 20px; margin: 0;">${generalList.map(renderTocItem).join('')}</ol>
           <h3 style="color: #059669; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(3) 시군이슈 (${localList.length}건)</h3>
           <ol style="padding-left: 20px; margin: 0;">${localList.map(renderTocItem).join('')}</ol>
-          <h3 style="color: #0d9488; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(4) 사회 / 문화 / 교육 이슈 (${eduList.length}건)</h3>
+          <h3 style="color: #b45309; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(4) 사설 및 칼럼 (${editorialList.length}건)</h3>
+          <ol style="padding-left: 20px; margin: 0;">${editorialList.map(renderTocItem).join('')}</ol>
+          <h3 style="color: #0d9488; font-size: 16px; margin: 18px 0 8px 0; font-weight: 800;">(5) 사회 / 문화 / 교육 이슈 (${eduList.length}건)</h3>
           <ol style="padding-left: 20px; margin: 0;">${eduList.map(renderTocItem).join('')}</ol>
         </div>
 
@@ -377,6 +432,7 @@ function buildHtmlEmailBody(aiResult, todayStr) {
           ${coreList.length > 0 ? `<h3 style="color: #2563eb; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #2563eb; padding-left: 8px;">■ 핵심현안</h3>` + coreList.map(item => renderSummaryCard(item, '#2563eb', '#eff6ff')).join('') : ''}
           ${generalList.length > 0 ? `<h3 style="color: #0284c7; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0284c7; padding-left: 8px;">■ 일반이슈</h3>` + generalList.map(item => renderSummaryCard(item, '#0284c7', '#f0f9ff')).join('') : ''}
           ${localList.length > 0 ? `<h3 style="color: #059669; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #059669; padding-left: 8px;">■ 시군이슈</h3>` + localList.map(item => renderSummaryCard(item, '#059669', '#ecfdf5')).join('') : ''}
+          ${editorialList.length > 0 ? `<h3 style="color: #b45309; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #b45309; padding-left: 8px;">■ 사설 및 칼럼</h3>` + editorialList.map(item => renderSummaryCard(item, '#b45309', '#fef3c7')).join('') : ''}
           ${eduList.length > 0 ? `<h3 style="color: #0d9488; font-size: 18px; margin: 24px 0 12px 0; font-weight: 800; border-left: 4px solid #0d9488; padding-left: 8px;">■ 사회/문화/교육</h3>` + eduList.map(item => renderSummaryCard(item, '#0d9488', '#f0fdfa')).join('') : ''}
         </div>
 
@@ -555,10 +611,6 @@ async function runGangwonNewsBot() {
 
   } catch (e) {
     console.error(`❌ 오류 발생: ${e.toString()}`);
-    /* try {
-      await sendEmail(`[오류 알림] 강원 뉴스 스크랩 봇 실행 실패 (${todayStr})`, `<p>오류 내용: ${e.toString()}</p>`);
-    } catch (mailErr) {}
-    */
     process.exit(1);
   }
 }
